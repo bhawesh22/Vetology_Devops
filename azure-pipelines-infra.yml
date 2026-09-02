@@ -14,7 +14,7 @@ variables:
   - group: vetology-infra-secrets
 
   - name: TF_WORKING_DIR
-    value: terraform
+    value: .
 
   - name: ANSIBLE_WORKING_DIR
     value: ansible
