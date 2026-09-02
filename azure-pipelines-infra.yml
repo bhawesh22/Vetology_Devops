@@ -5,10 +5,6 @@ variables:
 
 stages:
 
-# =========================================================
-# TERRAFORM STAGE
-# =========================================================
-
 - stage: Terraform
   displayName: 'Terraform Deployment'
 
@@ -23,18 +19,10 @@ stages:
 
     - checkout: self
 
-    # -----------------------------------------------------
-    # Install Terraform
-    # -----------------------------------------------------
-
     - task: TerraformInstaller@1
       displayName: 'Install Terraform'
       inputs:
         terraformVersion: 'latest'
-
-    # -----------------------------------------------------
-    # Terraform Init
-    # -----------------------------------------------------
 
     - task: TerraformTask@5
       displayName: 'Terraform Init'
@@ -48,10 +36,6 @@ stages:
         backendAzureRmContainerName: 'tfstate'
         backendAzureRmKey: 'vetology.terraform.tfstate'
 
-    # -----------------------------------------------------
-    # Terraform Plan
-    # -----------------------------------------------------
-
     - task: TerraformTask@5
       displayName: 'Terraform Plan'
       inputs:
@@ -59,10 +43,6 @@ stages:
         command: 'plan'
         workingDirectory: '$(System.DefaultWorkingDirectory)/terraform/Dev'
         environmentServiceNameAzureRM: 'vetologysc'
-
-    # -----------------------------------------------------
-    # Terraform Apply
-    # -----------------------------------------------------
 
     - task: TerraformTask@5
       displayName: 'Terraform Apply'
@@ -73,10 +53,6 @@ stages:
         environmentServiceNameAzureRM: 'vetologysc'
         commandOptions: '-auto-approve'
 
-    # -----------------------------------------------------
-    # Get VM Public IP
-    # -----------------------------------------------------
-
     - bash: |
         set -e
 
@@ -85,23 +61,17 @@ stages:
         VM_PUBLIC_IP=$(terraform output -raw vm_public_ip)
 
         if [ -z "$VM_PUBLIC_IP" ]; then
-          echo "ERROR: Terraform VM public IP is empty"
+          echo "ERROR: VM public IP is empty"
           exit 1
         fi
 
-        echo "======================================"
         echo "VM Public IP: $VM_PUBLIC_IP"
-        echo "======================================"
 
         echo "##vso[task.setvariable variable=VM_PUBLIC_IP;isOutput=true]$VM_PUBLIC_IP"
 
       name: TerraformOutput
       displayName: 'Get VM Public IP'
 
-
-# =========================================================
-# ANSIBLE STAGE
-# =========================================================
 
 - stage: Ansible
   displayName: 'Ansible Configuration'
@@ -123,24 +93,14 @@ stages:
 
     - checkout: self
 
-    # -----------------------------------------------------
-    # Show Terraform IP
-    # -----------------------------------------------------
-
     - bash: |
         set -e
 
-        echo "======================================"
-        echo "Terraform VM Public IP:"
+        echo "VM Public IP:"
         echo "$(VM_PUBLIC_IP)"
-        echo "======================================"
 
       displayName: 'Show VM Public IP'
 
-
-    # -----------------------------------------------------
-    # Check Linux Environment
-    # -----------------------------------------------------
 
     - bash: |
         set -e
@@ -157,48 +117,32 @@ stages:
       displayName: 'Check Linux Agent'
 
 
-    # -----------------------------------------------------
-    # Check Ansible
-    # -----------------------------------------------------
-
     - bash: |
         set -e
-
-        echo "Checking Ansible installation..."
 
         ansible --version
 
       displayName: 'Check Ansible Installation'
 
 
-    # -----------------------------------------------------
-    # Check SSH Key
-    # -----------------------------------------------------
-
     - bash: |
         set -e
 
         SSH_KEY="$HOME/.ssh/id_rsa"
 
-        echo "Checking SSH key:"
-        echo "$SSH_KEY"
+        echo "Checking SSH key: $SSH_KEY"
 
         if [ ! -f "$SSH_KEY" ]; then
-          echo "ERROR: SSH private key not found:"
-          echo "$SSH_KEY"
+          echo "ERROR: SSH private key not found"
           exit 1
         fi
 
         chmod 600 "$SSH_KEY"
 
-        echo "SSH private key found."
+        echo "SSH private key found"
 
       displayName: 'Check SSH Private Key'
 
-
-    # -----------------------------------------------------
-    # Generate Dynamic Ansible Inventory
-    # -----------------------------------------------------
 
     - bash: |
         set -e
@@ -209,23 +153,16 @@ stages:
 
         mkdir -p "$ANSIBLE_DIR"
 
-        cat > "$INVENTORY_FILE" <<EOF
-[devops_vm]
-$(VM_PUBLIC_IP) ansible_user=devops ansible_ssh_private_key_file=$SSH_KEY
-EOF
+        printf '%s\n' \
+          '[devops_vm]' \
+          "$(VM_PUBLIC_IP) ansible_user=devops ansible_ssh_private_key_file=$SSH_KEY" \
+          > "$INVENTORY_FILE"
 
-        echo "======================================"
-        echo "Generated Ansible Inventory:"
-        echo "======================================"
-
+        echo "Generated inventory:"
         cat "$INVENTORY_FILE"
 
       displayName: 'Generate Ansible Inventory'
 
-
-    # -----------------------------------------------------
-    # Test Ansible SSH Connection
-    # -----------------------------------------------------
 
     - bash: |
         set -e
@@ -239,19 +176,13 @@ EOF
       displayName: 'Test Ansible Connection'
 
 
-    # -----------------------------------------------------
-    # Run Ansible Playbook
-    # -----------------------------------------------------
-
     - bash: |
         set -e
 
         INVENTORY_FILE="$(System.DefaultWorkingDirectory)/$(ANSIBLE_WORKING_DIR)/inventory.ini"
         PLAYBOOK_FILE="$(System.DefaultWorkingDirectory)/$(ANSIBLE_WORKING_DIR)/playbook.yml"
 
-        echo "======================================"
-        echo "Running Ansible Playbook"
-        echo "======================================"
+        echo "Running Ansible Playbook..."
 
         ansible-playbook \
           -i "$INVENTORY_FILE" \
