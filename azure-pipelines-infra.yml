@@ -22,7 +22,7 @@ pool:
   name: vetologyself
 
 variables:
-  # - group: vetology-infra-secrets
+  - group: vetology-infra-secrets
   - name: TF_WORKING_DIR
     value: terraform
   - name: ANSIBLE_WORKING_DIR
