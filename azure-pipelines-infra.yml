@@ -60,7 +60,7 @@ stages:
               provider: azurerm
               command: plan
               workingDirectory: $(TF_WORKING_DIR)
-              environmentServiceNameAzureRM: "vetology-azure-service-connection"
+              environmentServiceNameAzureRM: ""vetologysc"
             env:
               ARM_CLIENT_ID: $(ARM_CLIENT_ID)
               ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
@@ -73,8 +73,8 @@ stages:
               provider: azurerm
               command: apply
               workingDirectory: $(TF_WORKING_DIR)
-              commandOptions: "-auto-approve"
-              environmentServiceNameAzureRM: "vetology-azure-service-connection"
+              commandOptions: "--auto-approve"
+              environmentServiceNameAzureRM: ""vetologysc"
             env:
               ARM_CLIENT_ID: $(ARM_CLIENT_ID)
               ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
