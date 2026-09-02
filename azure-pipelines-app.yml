@@ -100,245 +100,245 @@ stages:
           displayName: "Publish Docker image artifact"
 
 
-# ============================================================
-# 3. DEPLOY TEST
-# ============================================================
+# # ============================================================
+# # 3. DEPLOY TEST
+# # ============================================================
 
-- stage: DeployTest
-  displayName: "Deploy & Test on VM"
-  dependsOn: Build
+# - stage: DeployTest
+#   displayName: "Deploy & Test on VM"
+#   dependsOn: Build
 
-  jobs:
-    - deployment: DeployToVM
-      displayName: "Deploy to DevOps VM"
+#   jobs:
+#     - deployment: DeployToVM
+#       displayName: "Deploy to DevOps VM"
 
-      environment: vetology-dev
+#       environment: vetology-dev
 
-      strategy:
-        runOnce:
-          deploy:
+#       strategy:
+#         runOnce:
+#           deploy:
 
-            steps:
+#             steps:
 
-              # ------------------------------------------------
-              # Download Docker artifact
-              # ------------------------------------------------
+#               # ------------------------------------------------
+#               # Download Docker artifact
+#               # ------------------------------------------------
 
-              - download: current
-                artifact: docker-image
-                displayName: "Download Docker image"
+#               - download: current
+#                 artifact: docker-image
+#                 displayName: "Download Docker image"
 
 
-              # ------------------------------------------------
-              # Setup SSH
-              # ------------------------------------------------
+#               # ------------------------------------------------
+#               # Setup SSH
+#               # ------------------------------------------------
 
-              - bash: |
-                  set -e
+#               - bash: |
+#                   set -e
 
-                  echo "Setting up SSH..."
+#                   echo "Setting up SSH..."
 
-                  mkdir -p ~/.ssh
+#                   mkdir -p ~/.ssh
 
-                  echo "$(SSH_PRIVATE_KEY)" | base64 -d > ~/.ssh/id_rsa
+#                   echo "$(SSH_PRIVATE_KEY)" | base64 -d > ~/.ssh/id_rsa
 
-                  chmod 600 ~/.ssh/id_rsa
+#                   chmod 600 ~/.ssh/id_rsa
 
-                  ssh-keyscan -H "$(VM_IP)" >> ~/.ssh/known_hosts
+#                   ssh-keyscan -H "$(VM_IP)" >> ~/.ssh/known_hosts
 
-                  chmod 644 ~/.ssh/known_hosts
+#                   chmod 644 ~/.ssh/known_hosts
 
-                  echo "SSH key configured."
+#                   echo "SSH key configured."
 
-              displayName: "Setup SSH key"
+#               displayName: "Setup SSH key"
 
 
-              # ------------------------------------------------
-              # Test SSH connection
-              # ------------------------------------------------
+#               # ------------------------------------------------
+#               # Test SSH connection
+#               # ------------------------------------------------
 
-              - bash: |
-                  set -e
+#               - bash: |
+#                   set -e
 
-                  echo "Testing SSH connection..."
+#                   echo "Testing SSH connection..."
 
-                  ssh \
-                    -o ConnectTimeout=10 \
-                    -o StrictHostKeyChecking=no \
-                    -i ~/.ssh/id_rsa \
-                    devops@"$(VM_IP)" \
-                    "echo SSH_OK"
+#                   ssh \
+#                     -o ConnectTimeout=10 \
+#                     -o StrictHostKeyChecking=no \
+#                     -i ~/.ssh/id_rsa \
+#                     devops@"$(VM_IP)" \
+#                     "echo SSH_OK"
 
-              displayName: "Test SSH Connection"
+#               displayName: "Test SSH Connection"
 
 
-              # ------------------------------------------------
-              # Copy Docker image to VM
-              # ------------------------------------------------
+#               # ------------------------------------------------
+#               # Copy Docker image to VM
+#               # ------------------------------------------------
 
-              - bash: |
-                  set -e
+#               - bash: |
+#                   set -e
 
-                  echo "Copying Docker image to VM..."
+#                   echo "Copying Docker image to VM..."
 
-                  scp \
-                    -i ~/.ssh/id_rsa \
-                    "$(Pipeline.Workspace)/docker-image/webtext-app.tar.gz" \
-                    devops@"$(VM_IP)":~/webtext-app.tar.gz
+#                   scp \
+#                     -i ~/.ssh/id_rsa \
+#                     "$(Pipeline.Workspace)/docker-image/webtext-app.tar.gz" \
+#                     devops@"$(VM_IP)":~/webtext-app.tar.gz
 
-              displayName: "Copy Docker image"
+#               displayName: "Copy Docker image"
 
 
-              # ------------------------------------------------
-              # Copy application files
-              # ------------------------------------------------
+#               # ------------------------------------------------
+#               # Copy application files
+#               # ------------------------------------------------
 
-              - bash: |
-                  set -e
+#               - bash: |
+#                   set -e
 
-                  echo "Copying application files..."
+#                   echo "Copying application files..."
 
-                  ssh \
-                    -i ~/.ssh/id_rsa \
-                    devops@"$(VM_IP)" \
-                    "mkdir -p ~/vetology-devops"
+#                   ssh \
+#                     -i ~/.ssh/id_rsa \
+#                     devops@"$(VM_IP)" \
+#                     "mkdir -p ~/vetology-devops"
 
-                  scp \
-                    -i ~/.ssh/id_rsa \
-                    "$(Build.SourcesDirectory)/Taskfile.yml" \
-                    "$(Build.SourcesDirectory)/Dockerfile" \
-                    "$(Build.SourcesDirectory)/index.html" \
-                    devops@"$(VM_IP)":~/vetology-devops/
+#                   scp \
+#                     -i ~/.ssh/id_rsa \
+#                     "$(Build.SourcesDirectory)/Taskfile.yml" \
+#                     "$(Build.SourcesDirectory)/Dockerfile" \
+#                     "$(Build.SourcesDirectory)/index.html" \
+#                     devops@"$(VM_IP)":~/vetology-devops/
 
-              displayName: "Copy application files"
+#               displayName: "Copy application files"
 
 
-              # ------------------------------------------------
-              # Deploy + Test
-              # ------------------------------------------------
+#               # ------------------------------------------------
+#               # Deploy + Test
+#               # ------------------------------------------------
 
-              - bash: |
-                  set -e
+#               - bash: |
+#                   set -e
 
-                  echo "Deploying application on VM..."
+#                   echo "Deploying application on VM..."
 
-                  ssh \
-                    -i ~/.ssh/id_rsa \
-                    devops@"$(VM_IP)" << 'EOF'
+#                   ssh \
+#                     -i ~/.ssh/id_rsa \
+#                     devops@"$(VM_IP)" << 'EOF'
 
-                  set -e
+#                   set -e
 
-                  cd ~/vetology-devops
+#                   cd ~/vetology-devops
 
-                  echo "Loading Docker image..."
-                  docker load < ~/webtext-app.tar.gz
+#                   echo "Loading Docker image..."
+#                   docker load < ~/webtext-app.tar.gz
 
-                  echo "Running deployment..."
-                  task deploy
+#                   echo "Running deployment..."
+#                   task deploy
 
-                  echo "Running tests..."
-                  task test
+#                   echo "Running tests..."
+#                   task test
 
-                  echo "Deployment and tests completed."
+#                   echo "Deployment and tests completed."
 
-                  EOF
+#                   EOF
 
-              displayName: "Deploy and test on VM"
+#               displayName: "Deploy and test on VM"
 
 
-# ============================================================
-# 4. DOPPLER DEPLOY
-# ============================================================
+# # ============================================================
+# # 4. DOPPLER DEPLOY
+# # ============================================================
 
-- stage: DeployDoppler
-  displayName: "Deploy with Doppler"
-  dependsOn: DeployTest
+# - stage: DeployDoppler
+#   displayName: "Deploy with Doppler"
+#   dependsOn: DeployTest
 
-  condition: and(
-    succeeded(),
-    eq(variables['Build.SourceBranch'], 'refs/heads/main')
-  )
+#   condition: and(
+#     succeeded(),
+#     eq(variables['Build.SourceBranch'], 'refs/heads/main')
+#   )
 
-  jobs:
-    - deployment: DeployDopplerJob
-      displayName: "task deploywithdoppler"
+#   jobs:
+#     - deployment: DeployDopplerJob
+#       displayName: "task deploywithdoppler"
 
-      environment: vetology-dev
+#       environment: vetology-dev
 
-      strategy:
-        runOnce:
-          deploy:
+#       strategy:
+#         runOnce:
+#           deploy:
 
-            steps:
+#             steps:
 
-              # ------------------------------------------------
-              # Setup SSH
-              # ------------------------------------------------
+#               # ------------------------------------------------
+#               # Setup SSH
+#               # ------------------------------------------------
 
-              - bash: |
-                  set -e
+#               - bash: |
+#                   set -e
 
-                  echo "Setting up SSH..."
+#                   echo "Setting up SSH..."
 
-                  mkdir -p ~/.ssh
+#                   mkdir -p ~/.ssh
 
-                  echo "$(SSH_PRIVATE_KEY)" | base64 -d > ~/.ssh/id_rsa
+#                   echo "$(SSH_PRIVATE_KEY)" | base64 -d > ~/.ssh/id_rsa
 
-                  chmod 600 ~/.ssh/id_rsa
+#                   chmod 600 ~/.ssh/id_rsa
 
-                  ssh-keyscan -H "$(VM_IP)" >> ~/.ssh/known_hosts
+#                   ssh-keyscan -H "$(VM_IP)" >> ~/.ssh/known_hosts
 
-                  chmod 644 ~/.ssh/known_hosts
+#                   chmod 644 ~/.ssh/known_hosts
 
-              displayName: "Setup SSH key"
+#               displayName: "Setup SSH key"
 
 
-              # ------------------------------------------------
-              # Test SSH
-              # ------------------------------------------------
+#               # ------------------------------------------------
+#               # Test SSH
+#               # ------------------------------------------------
 
-              - bash: |
-                  set -e
+#               - bash: |
+#                   set -e
 
-                  ssh \
-                    -o ConnectTimeout=10 \
-                    -o StrictHostKeyChecking=no \
-                    -i ~/.ssh/id_rsa \
-                    devops@"$(VM_IP)" \
-                    "echo SSH_OK"
+#                   ssh \
+#                     -o ConnectTimeout=10 \
+#                     -o StrictHostKeyChecking=no \
+#                     -i ~/.ssh/id_rsa \
+#                     devops@"$(VM_IP)" \
+#                     "echo SSH_OK"
 
-              displayName: "Test SSH Connection"
+#               displayName: "Test SSH Connection"
 
 
-              # ------------------------------------------------
-              # Deploy using Doppler
-              # ------------------------------------------------
+#               # ------------------------------------------------
+#               # Deploy using Doppler
+#               # ------------------------------------------------
 
-              - bash: |
-                  set -e
+#               - bash: |
+#                   set -e
 
-                  echo "Running Doppler deployment..."
+#                   echo "Running Doppler deployment..."
 
-                  ssh \
-                    -i ~/.ssh/id_rsa \
-                    devops@"$(VM_IP)" \
-                    "cd ~/vetology-devops && DOPPLER_TOKEN='$(DOPPLER_TOKEN)' task deploywithdoppler"
+#                   ssh \
+#                     -i ~/.ssh/id_rsa \
+#                     devops@"$(VM_IP)" \
+#                     "cd ~/vetology-devops && DOPPLER_TOKEN='$(DOPPLER_TOKEN)' task deploywithdoppler"
 
-              displayName: "Run deploywithdoppler"
+#               displayName: "Run deploywithdoppler"
 
 
-              # ------------------------------------------------
-              # Verify application
-              # ------------------------------------------------
+#               # ------------------------------------------------
+#               # Verify application
+#               # ------------------------------------------------
 
-              - bash: |
-                  set -e
+#               - bash: |
+#                   set -e
 
-                  echo "Checking application..."
+#                   echo "Checking application..."
 
-                  ssh \
-                    -i ~/.ssh/id_rsa \
-                    devops@"$(VM_IP)" \
-                    "curl -fsS http://localhost:8081"
+#                   ssh \
+#                     -i ~/.ssh/id_rsa \
+#                     devops@"$(VM_IP)" \
+#                     "curl -fsS http://localhost:8081"
 
-              displayName: "Verify application response"
+#               displayName: "Verify application response"
