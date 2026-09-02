@@ -1,14 +1,4 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# Pipeline 1: Infrastructure — Terraform (provision VM) + Ansible (install tools)
-# Trigger: changes in terraform/ or ansible/ folders, or manual run
-# Required Azure DevOps Variable Group: "vetology-infra-secrets"
-#   - ARM_CLIENT_ID
-#   - ARM_CLIENT_SECRET
-#   - ARM_SUBSCRIPTION_ID
-#   - ARM_TENANT_ID
-#   - SSH_PRIVATE_KEY   (base64 encoded private key for Ansible)
-# ─────────────────────────────────────────────────────────────────────────────
-
+```yaml
 trigger:
   branches:
     include:
@@ -23,103 +13,149 @@ pool:
 
 variables:
   - group: vetology-infra-secrets
+
   - name: TF_WORKING_DIR
     value: terraform
+
   - name: ANSIBLE_WORKING_DIR
     value: ansible
 
 stages:
 
-  # ─── Stage 1: Terraform ───────────────────────────────────────────────────
+  # ============================================================
+  # Stage 1: Terraform
+  # ============================================================
   - stage: Terraform
-    displayName: "Provision Infrastructure (Terraform)"
+    displayName: "Provision Infrastructure - Terraform"
+
     jobs:
       - job: TerraformPlan
-        displayName: "Terraform Init + Plan"
+        displayName: "Terraform Init + Plan + Apply"
+
         steps:
+
+          # ----------------------------------------------------
+          # DEBUG: Check repository structure
+          # ----------------------------------------------------
+          - powershell: |
+              Write-Host "=========================================="
+              Write-Host "REPOSITORY ROOT"
+              Write-Host "=========================================="
+
+              Get-ChildItem "$(Build.SourcesDirectory)"
+
+              Write-Host ""
+              Write-Host "=========================================="
+              Write-Host "TERRAFORM DIRECTORY"
+              Write-Host "=========================================="
+
+              if (Test-Path "$(Build.SourcesDirectory)\terraform") {
+                  Get-ChildItem "$(Build.SourcesDirectory)\terraform"
+              }
+              else {
+                  Write-Error "terraform folder NOT FOUND"
+              }
+
+              Write-Host ""
+              Write-Host "=========================================="
+              Write-Host "ALL TERRAFORM FILES"
+              Write-Host "=========================================="
+
+              Get-ChildItem `
+                "$(Build.SourcesDirectory)" `
+                -Filter "*.tf" `
+                -Recurse
+
+            displayName: "Check Terraform Files"
+
+
+          # ----------------------------------------------------
+          # Install Terraform
+          # ----------------------------------------------------
           - task: TerraformInstaller@1
             displayName: "Install Terraform"
             inputs:
               terraformVersion: "1.7.5"
 
+
+          # ----------------------------------------------------
+          # Terraform Init
+          # ----------------------------------------------------
           - task: TerraformTaskV4@4
             displayName: "Terraform Init"
             inputs:
               provider: azurerm
               command: init
-              workingDirectory: $(TF_WORKING_DIR)
+              workingDirectory: "$(TF_WORKING_DIR)"
               backendServiceArm: "vetologysc"
               backendAzureRmResourceGroupName: "rg-vetology-tfstate"
               backendAzureRmStorageAccountName: "stvetologytfstate"
               backendAzureRmContainerName: "tfstate"
               backendAzureRmKey: "vetology.terraform.tfstate"
 
+
+          # ----------------------------------------------------
+          # Terraform Plan
+          # ----------------------------------------------------
           - task: TerraformTaskV4@4
             displayName: "Terraform Plan"
             inputs:
               provider: azurerm
               command: plan
-              workingDirectory: $(TF_WORKING_DIR)
+              workingDirectory: "$(TF_WORKING_DIR)"
               environmentServiceNameAzureRM: "vetologysc"
-            env:
-              ARM_CLIENT_ID: $(ARM_CLIENT_ID)
-              ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
-              ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
-              ARM_TENANT_ID: $(ARM_TENANT_ID)
 
+
+          # ----------------------------------------------------
+          # Terraform Apply
+          # ----------------------------------------------------
           - task: TerraformTaskV4@4
             displayName: "Terraform Apply"
             inputs:
               provider: azurerm
               command: apply
-              workingDirectory: $(TF_WORKING_DIR)
-              commandOptions: "--auto-approve"
+              workingDirectory: "$(TF_WORKING_DIR)"
+              commandOptions: "-auto-approve"
               environmentServiceNameAzureRM: "vetologysc"
-            env:
-              ARM_CLIENT_ID: $(ARM_CLIENT_ID)
-              ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
-              ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
-              ARM_TENANT_ID: $(ARM_TENANT_ID)
 
-          # Save VM public IP as pipeline artifact for Ansible stage
-          - bash: |
-              cd $(TF_WORKING_DIR)
-              VM_IP=$(terraform output -raw vm_public_ip)
-              echo "##vso[task.setvariable variable=VM_IP;isOutput=true]$VM_IP"
-              echo "VM Public IP: $VM_IP"
+
+          # ----------------------------------------------------
+          # Get VM Public IP
+          # ----------------------------------------------------
+          - powershell: |
+              $terraformDir = "$(Build.SourcesDirectory)\$(TF_WORKING_DIR)"
+
+              Set-Location $terraformDir
+
+              $VM_IP = terraform output -raw vm_public_ip
+
+              Write-Host "VM Public IP: $VM_IP"
+
+              Write-Host "##vso[task.setvariable variable=VM_IP;isOutput=true]$VM_IP"
+
             name: GetVMIP
             displayName: "Export VM Public IP"
 
-  # ─── Stage 2: Ansible ─────────────────────────────────────────────────────
+
+  # ============================================================
+  # Stage 2: Ansible
+  # ============================================================
   - stage: Ansible
-    displayName: "Install Tools on VM (Ansible)"
+    displayName: "Install Tools on VM - Ansible"
+
     dependsOn: Terraform
+
     variables:
       VM_IP: $[ stageDependencies.Terraform.TerraformPlan.outputs['GetVMIP.VM_IP'] ]
+
     jobs:
       - job: AnsibleProvision
         displayName: "Run Ansible Playbook"
+
         steps:
-          - bash: pip install ansible
-            displayName: "Install Ansible"
 
-          - bash: |
-              mkdir -p ~/.ssh
-              echo "$(SSH_PRIVATE_KEY)" | base64 -d > ~/.ssh/id_rsa
-              chmod 600 ~/.ssh/id_rsa
-              ssh-keyscan -H $(VM_IP) >> ~/.ssh/known_hosts
-            displayName: "Setup SSH Key"
-
-          - bash: |
-              cat > $(ANSIBLE_WORKING_DIR)/inventory.ini <<EOF
-              [devops_vm]
-              $(VM_IP) ansible_user=devops ansible_ssh_private_key_file=~/.ssh/id_rsa
-              EOF
-            displayName: "Generate Ansible Inventory"
-
-          - bash: |
-              ansible-playbook \
-                -i $(ANSIBLE_WORKING_DIR)/inventory.ini \
-                $(ANSIBLE_WORKING_DIR)/playbook.yml \
-                --ssh-extra-args="-o StrictHostKeyChecking=no"
-            displayName: "Run Ansible Playbook"
+          - powershell: |
+              Write-Host "VM IP received from Terraform:"
+              Write-Host "$(VM_IP)"
+            displayName: "Check VM IP"
+```
