@@ -53,24 +53,31 @@ stages:
         environmentServiceNameAzureRM: 'vetologysc'
         commandOptions: '-auto-approve'
 
-    - bash: |
-        set -e
+    - task: AzureCLI@2
+      displayName: 'Get VM Public IP'
+      inputs:
+        azureSubscription: 'vetologysc'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          set -e
 
-        cd "$(System.DefaultWorkingDirectory)/terraform/Dev"
+          VM_PUBLIC_IP=$(az network public-ip show \
+            --resource-group "rg-vetology-devops" \
+            --name "pip-vetology-dev" \
+            --query "ipAddress" \
+            --output tsv)
 
-        VM_PUBLIC_IP=$(terraform output -raw vm_public_ip)
+          if [ -z "$VM_PUBLIC_IP" ]; then
+            echo "ERROR: VM public IP is empty"
+            exit 1
+          fi
 
-        if [ -z "$VM_PUBLIC_IP" ]; then
-          echo "ERROR: VM public IP is empty"
-          exit 1
-        fi
+          echo "VM Public IP: $VM_PUBLIC_IP"
 
-        echo "VM Public IP: $VM_PUBLIC_IP"
-
-        echo "##vso[task.setvariable variable=VM_PUBLIC_IP;isOutput=true]$VM_PUBLIC_IP"
+          echo "##vso[task.setvariable variable=VM_PUBLIC_IP;isOutput=true]$VM_PUBLIC_IP"
 
       name: TerraformOutput
-      displayName: 'Get VM Public IP'
 
 
 - stage: Ansible
@@ -189,4 +196,3 @@ stages:
           "$PLAYBOOK_FILE"
 
       displayName: 'Run Ansible Playbook'
-
