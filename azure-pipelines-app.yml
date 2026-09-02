@@ -18,7 +18,7 @@ trigger:
       - Taskfile.yml
 
 pool:
-  vmImage: ubuntu-latest
+  vmImage: Default
 
 variables:
   - group: vetology-app-secrets
