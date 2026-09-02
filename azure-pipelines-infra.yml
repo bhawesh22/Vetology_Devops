@@ -1,4 +1,4 @@
-```yaml
+
 variables:
   - name: ANSIBLE_WORKING_DIR
     value: ansible
@@ -158,4 +158,3 @@ EOF
           "$(System.DefaultWorkingDirectory)/$(ANSIBLE_WORKING_DIR)/playbook.yml"
 
       displayName: 'Run Ansible Playbook'
-```
