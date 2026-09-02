@@ -48,7 +48,7 @@ stages:
               provider: azurerm
               command: init
               workingDirectory: $(TF_WORKING_DIR)
-              backendServiceArm: "vetology-azure-service-connection"
+              backendServiceArm: "vetologysc"
               backendAzureRmResourceGroupName: "rg-vetology-tfstate"
               backendAzureRmStorageAccountName: "stvetologytfstate"
               backendAzureRmContainerName: "tfstate"
