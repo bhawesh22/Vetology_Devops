@@ -1,4 +1,4 @@
-
+```yaml
 variables:
   - name: ANSIBLE_WORKING_DIR
     value: ansible
@@ -23,13 +23,16 @@ stages:
 
     - checkout: self
 
+    # Install Terraform
     - task: TerraformInstaller@1
       displayName: 'Install Terraform'
       inputs:
         terraformVersion: 'latest'
 
-
+    # =====================================================
     # Terraform Init
+    # =====================================================
+
     - task: TerraformTask@5
       displayName: 'Terraform Init'
       inputs:
@@ -42,8 +45,10 @@ stages:
         backendAzureRmContainerName: 'tfstate'
         backendAzureRmKey: 'vetology.terraform.tfstate'
 
-
+    # =====================================================
     # Terraform Plan
+    # =====================================================
+
     - task: TerraformTask@5
       displayName: 'Terraform Plan'
       inputs:
@@ -52,8 +57,10 @@ stages:
         workingDirectory: '$(System.DefaultWorkingDirectory)/terraform/Dev'
         environmentServiceNameAzureRM: 'vetologysc'
 
-
+    # =====================================================
     # Terraform Apply
+    # =====================================================
+
     - task: TerraformTask@5
       displayName: 'Terraform Apply'
       inputs:
@@ -63,8 +70,10 @@ stages:
         environmentServiceNameAzureRM: 'vetologysc'
         commandOptions: '-auto-approve'
 
+    # =====================================================
+    # Get VM Public IP from Terraform Output
+    # =====================================================
 
-    # Get VM Public IP
     - bash: |
         set -e
 
@@ -106,9 +115,13 @@ stages:
 
     - checkout: self
 
-
+    # =====================================================
     # Show Terraform IP
+    # =====================================================
+
     - bash: |
+        set -e
+
         echo "======================================"
         echo "Terraform VM Public IP:"
         echo "$(VM_PUBLIC_IP)"
@@ -117,44 +130,97 @@ stages:
       displayName: 'Show VM Public IP'
 
 
-    # Generate Ansible Inventory
+    # =====================================================
+    # Check Ansible Installation
+    # =====================================================
+
     - bash: |
         set -e
 
-        mkdir -p "$(System.DefaultWorkingDirectory)/$(ANSIBLE_WORKING_DIR)"
+        echo "Checking Ansible installation..."
+        ansible --version
 
-        cat > "$(System.DefaultWorkingDirectory)/$(ANSIBLE_WORKING_DIR)/inventory.ini" <<EOF
-[devops_vm]
-$(VM_PUBLIC_IP) ansible_user=devops ansible_ssh_private_key_file=/home/user/.ssh/id_rsa
-EOF
+      displayName: 'Check Ansible Installation'
+
+
+    # =====================================================
+    # Check SSH Private Key
+    # =====================================================
+
+    - bash: |
+        set -e
+
+        echo "Checking SSH private key..."
+
+        if [ ! -f "/home/user/.ssh/id_rsa" ]; then
+          echo "ERROR: SSH private key not found at /home/user/.ssh/id_rsa"
+          exit 1
+        fi
+
+        chmod 600 /home/user/.ssh/id_rsa
+
+        echo "SSH private key found."
+
+      displayName: 'Check SSH Private Key'
+
+
+    # =====================================================
+    # Generate Ansible Inventory
+    # =====================================================
+
+    - bash: |
+        set -e
+
+        INVENTORY_DIR="$(System.DefaultWorkingDirectory)/$(ANSIBLE_WORKING_DIR)"
+        INVENTORY_FILE="$INVENTORY_DIR/inventory.ini"
+
+        mkdir -p "$INVENTORY_DIR"
+
+        cat > "$INVENTORY_FILE" <<EOF
+        [devops_vm]
+        $(VM_PUBLIC_IP) ansible_user=devops ansible_ssh_private_key_file=/home/user/.ssh/id_rsa
+        EOF
 
         echo "======================================"
         echo "Generated Ansible Inventory:"
         echo "======================================"
 
-        cat "$(System.DefaultWorkingDirectory)/$(ANSIBLE_WORKING_DIR)/inventory.ini"
+        cat "$INVENTORY_FILE"
 
       displayName: 'Generate Ansible Inventory'
 
 
+    # =====================================================
     # Test Ansible Connection
+    # =====================================================
+
     - bash: |
         set -e
 
-        ansible \
-          -i "$(System.DefaultWorkingDirectory)/$(ANSIBLE_WORKING_DIR)/inventory.ini" \
-          devops_vm \
-          -m ping
+        INVENTORY_FILE="$(System.DefaultWorkingDirectory)/$(ANSIBLE_WORKING_DIR)/inventory.ini"
+
+        echo "Testing Ansible connection..."
+
+        ansible -i "$INVENTORY_FILE" devops_vm -m ping
 
       displayName: 'Test Ansible Connection'
 
 
+    # =====================================================
     # Run Ansible Playbook
+    # =====================================================
+
     - bash: |
         set -e
 
+        INVENTORY_FILE="$(System.DefaultWorkingDirectory)/$(ANSIBLE_WORKING_DIR)/inventory.ini"
+        PLAYBOOK_FILE="$(System.DefaultWorkingDirectory)/$(ANSIBLE_WORKING_DIR)/playbook.yml"
+
+        echo "Running Ansible Playbook..."
+
         ansible-playbook \
-          -i "$(System.DefaultWorkingDirectory)/$(ANSIBLE_WORKING_DIR)/inventory.ini" \
-          "$(System.DefaultWorkingDirectory)/$(ANSIBLE_WORKING_DIR)/playbook.yml"
+          -i "$INVENTORY_FILE" \
+          "$PLAYBOOK_FILE"
 
       displayName: 'Run Ansible Playbook'
+```
