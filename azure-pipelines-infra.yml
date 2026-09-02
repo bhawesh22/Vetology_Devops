@@ -1,4 +1,4 @@
-```yaml
+
 variables:
   - name: ANSIBLE_WORKING_DIR
     value: ansible
@@ -223,4 +223,4 @@ stages:
           "$PLAYBOOK_FILE"
 
       displayName: 'Run Ansible Playbook'
-```
+
