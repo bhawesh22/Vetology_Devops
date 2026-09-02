@@ -1,4 +1,4 @@
-
+```yaml
 variables:
   - name: ANSIBLE_WORKING_DIR
     value: ansible
@@ -6,7 +6,7 @@ variables:
 stages:
 
 # =========================================================
-# TERRAFORM
+# TERRAFORM STAGE
 # =========================================================
 
 - stage: Terraform
@@ -29,10 +29,7 @@ stages:
         terraformVersion: 'latest'
 
 
-    # -------------------------
     # Terraform Init
-    # -------------------------
-
     - task: TerraformTask@5
       displayName: 'Terraform Init'
       inputs:
@@ -46,10 +43,7 @@ stages:
         backendAzureRmKey: 'vetology.terraform.tfstate'
 
 
-    # -------------------------
     # Terraform Plan
-    # -------------------------
-
     - task: TerraformTask@5
       displayName: 'Terraform Plan'
       inputs:
@@ -59,10 +53,7 @@ stages:
         environmentServiceNameAzureRM: 'vetologysc'
 
 
-    # -------------------------
     # Terraform Apply
-    # -------------------------
-
     - task: TerraformTask@5
       displayName: 'Terraform Apply'
       inputs:
@@ -73,10 +64,7 @@ stages:
         commandOptions: '-auto-approve'
 
 
-    # -------------------------
     # Get VM Public IP
-    # -------------------------
-
     - bash: |
         set -e
 
@@ -84,7 +72,9 @@ stages:
 
         VM_PUBLIC_IP=$(terraform output -raw vm_public_ip)
 
+        echo "======================================"
         echo "VM Public IP: $VM_PUBLIC_IP"
+        echo "======================================"
 
         echo "##vso[task.setvariable variable=VM_PUBLIC_IP;isOutput=true]$VM_PUBLIC_IP"
 
@@ -93,14 +83,13 @@ stages:
 
 
 # =========================================================
-# ANSIBLE
+# ANSIBLE STAGE
 # =========================================================
 
 - stage: Ansible
   displayName: 'Ansible Configuration'
 
   dependsOn: Terraform
-
   condition: succeeded()
 
   variables:
@@ -118,21 +107,17 @@ stages:
     - checkout: self
 
 
-    # -------------------------
-    # Show IP
-    # -------------------------
-
+    # Show Terraform IP
     - bash: |
+        echo "======================================"
         echo "Terraform VM Public IP:"
         echo "$(VM_PUBLIC_IP)"
+        echo "======================================"
 
       displayName: 'Show VM Public IP'
 
 
-    # -------------------------
     # Generate Ansible Inventory
-    # -------------------------
-
     - bash: |
         set -e
 
@@ -143,16 +128,16 @@ stages:
 $(VM_PUBLIC_IP) ansible_user=devops ansible_ssh_private_key_file=/home/user/.ssh/id_rsa
 EOF
 
+        echo "======================================"
         echo "Generated Ansible Inventory:"
+        echo "======================================"
+
         cat "$(System.DefaultWorkingDirectory)/$(ANSIBLE_WORKING_DIR)/inventory.ini"
 
       displayName: 'Generate Ansible Inventory'
 
 
-    # -------------------------
     # Test Ansible Connection
-    # -------------------------
-
     - bash: |
         set -e
 
@@ -164,10 +149,7 @@ EOF
       displayName: 'Test Ansible Connection'
 
 
-    # -------------------------
     # Run Ansible Playbook
-    # -------------------------
-
     - bash: |
         set -e
 
@@ -176,3 +158,4 @@ EOF
           "$(System.DefaultWorkingDirectory)/$(ANSIBLE_WORKING_DIR)/playbook.yml"
 
       displayName: 'Run Ansible Playbook'
+```
