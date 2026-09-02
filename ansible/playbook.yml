@@ -6,7 +6,7 @@
 
   vars:
     task_version: "3.35.1"
-    doppler_apt_key_url: "https://packages.doppler.com/public/cli/gpg.DE57EDBF.gpg"
+    doppler_apt_key_url: "https://packages.doppler.com/public/cli/gpg.DE2A7741A397C129.key"
 
   tasks:
 
@@ -58,7 +58,6 @@
           - docker-ce-cli
           - containerd.io
           - docker-buildx-plugin
-          - docker-compose-plugin
         state: present
         update_cache: true
 
