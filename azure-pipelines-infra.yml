@@ -1,211 +1,261 @@
-```yaml
-trigger:
-  branches:
-    include:
-      - main
-  paths:
-    include:
-      - terraform/**
-      - ansible/**
+# ```yaml
+# trigger:
+#   branches:
+#     include:
+#       - main
+#   paths:
+#     include:
+#       - terraform/**
+#       - ansible/**
 
-pool:
-  name: Default
+# pool:
+#   name: Default
 
-variables:
-  - group: vetology-infra-secrets
+# variables:
+#   - group: vetology-infra-secrets
 
-  # Terraform files repository root mein hain
-  - name: TF_WORKING_DIR
-    value: .
+#   # Terraform files repository root mein hain
+#   - name: TF_WORKING_DIR
+#     value: .
 
-  - name: ANSIBLE_WORKING_DIR
-    value: ansible
+#   - name: ANSIBLE_WORKING_DIR
+#     value: ansible
+
+# stages:
+
+#   # ============================================================
+#   # STAGE 1 - TERRAFORM
+#   # ============================================================
+
+#   - stage: Terraform
+#     displayName: "Provision Infrastructure - Terraform"
+
+#     jobs:
+#       - job: TerraformPlan
+#         displayName: "Terraform Init Plan Apply"
+
+#         steps:
+
+#           # ----------------------------------------------------
+#           # 1. Verify repository and Terraform files
+#           # ----------------------------------------------------
+
+#           - powershell: |
+#               Write-Host "=========================================="
+#               Write-Host "REPOSITORY ROOT"
+#               Write-Host "=========================================="
+
+#               $repo = "$(Build.SourcesDirectory)"
+
+#               Write-Host "Repository: $repo"
+#               Write-Host ""
+
+#               Get-ChildItem $repo -Force
+
+#               Write-Host ""
+#               Write-Host "=========================================="
+#               Write-Host "TERRAFORM FILES"
+#               Write-Host "=========================================="
+
+#               $tfFiles = Get-ChildItem $repo -Filter "*.tf" -Recurse -File
+
+#               if ($tfFiles.Count -eq 0) {
+#                   Write-Error "NO Terraform .tf files found in repository."
+#                   exit 1
+#               }
+
+#               foreach ($file in $tfFiles) {
+#                   Write-Host $file.FullName
+#               }
+
+#               Write-Host ""
+#               Write-Host "Terraform files found: $($tfFiles.Count)"
+
+#             displayName: "Check Terraform Files"
+
+
+#           # ----------------------------------------------------
+#           # 2. Install Terraform
+#           # ----------------------------------------------------
+
+#           - task: TerraformInstaller@1
+#             displayName: "Install Terraform"
+
+#             inputs:
+#               terraformVersion: "1.7.5"
+
+
+#           # ----------------------------------------------------
+#           # 3. Terraform Init
+#           # ----------------------------------------------------
+
+#           - task: TerraformTaskV4@4
+#             displayName: "Terraform Init"
+
+#             inputs:
+#               provider: azurerm
+#               command: init
+
+#               workingDirectory: "$(Build.SourcesDirectory)"
+
+#               backendServiceArm: "vetologysc"
+#               backendAzureRmResourceGroupName: "rg-vetology-tfstate"
+#               backendAzureRmStorageAccountName: "stvetologytfstate"
+#               backendAzureRmContainerName: "tfstate"
+#               backendAzureRmKey: "vetology.terraform.tfstate"
+
+
+#           # ----------------------------------------------------
+#           # 4. Terraform Plan
+#           # ----------------------------------------------------
+
+#           - task: TerraformTaskV4@4
+#             displayName: "Terraform Plan"
+
+#             inputs:
+#               provider: azurerm
+#               command: plan
+
+#               workingDirectory: "$(Build.SourcesDirectory)"
+
+#               environmentServiceNameAzureRM: "vetologysc"
+
+
+#           # ----------------------------------------------------
+#           # 5. Terraform Apply
+#           # ----------------------------------------------------
+
+#           - task: TerraformTaskV4@4
+#             displayName: "Terraform Apply"
+
+#             inputs:
+#               provider: azurerm
+#               command: apply
+
+#               workingDirectory: "$(Build.SourcesDirectory)"
+
+#               commandOptions: "-auto-approve"
+
+#               environmentServiceNameAzureRM: "vetologysc"
+
+
+#           # ----------------------------------------------------
+#           # 6. Export VM Public IP
+#           # ----------------------------------------------------
+
+#           - powershell: |
+#               $terraformDir = "$(Build.SourcesDirectory)"
+
+#               Write-Host "=========================================="
+#               Write-Host "GET VM PUBLIC IP"
+#               Write-Host "=========================================="
+
+#               Write-Host "Terraform directory:"
+#               Write-Host $terraformDir
+
+#               Set-Location $terraformDir
+
+#               Write-Host ""
+#               Write-Host "Terraform outputs:"
+#               terraform output
+
+#               Write-Host ""
+#               Write-Host "Getting vm_public_ip..."
+
+#               $VM_IP = terraform output -raw vm_public_ip
+
+#               if ([string]::IsNullOrWhiteSpace($VM_IP)) {
+#                   Write-Error "vm_public_ip Terraform output is empty."
+#                   exit 1
+#               }
+
+#               Write-Host "VM Public IP: $VM_IP"
+
+#               Write-Host "##vso[task.setvariable variable=VM_IP;isOutput=true]$VM_IP"
+
+#             name: GetVMIP
+#             displayName: "Export VM Public IP"
 
 stages:
 
-  # ============================================================
-  # STAGE 1 - TERRAFORM
-  # ============================================================
+- stage: Terraform
+  displayName: 'Terraform Deployment'
+  jobs:
 
-  - stage: Terraform
-    displayName: "Provision Infrastructure - Terraform"
+  - job: Terraform
+    displayName: 'Terraform Init, Plan & Apply'
+    pool:
+      name: Default
 
-    jobs:
-      - job: TerraformPlan
-        displayName: "Terraform Init Plan Apply"
+    steps:
 
-        steps:
+    - task: TerraformInstaller@1
+      displayName: 'Install Terraform'
+      inputs:
+        terraformVersion: 'latest'
 
-          # ----------------------------------------------------
-          # 1. Verify repository and Terraform files
-          # ----------------------------------------------------
-
-          - powershell: |
-              Write-Host "=========================================="
-              Write-Host "REPOSITORY ROOT"
-              Write-Host "=========================================="
-
-              $repo = "$(Build.SourcesDirectory)"
-
-              Write-Host "Repository: $repo"
-              Write-Host ""
-
-              Get-ChildItem $repo -Force
-
-              Write-Host ""
-              Write-Host "=========================================="
-              Write-Host "TERRAFORM FILES"
-              Write-Host "=========================================="
-
-              $tfFiles = Get-ChildItem $repo -Filter "*.tf" -Recurse -File
-
-              if ($tfFiles.Count -eq 0) {
-                  Write-Error "NO Terraform .tf files found in repository."
-                  exit 1
-              }
-
-              foreach ($file in $tfFiles) {
-                  Write-Host $file.FullName
-              }
-
-              Write-Host ""
-              Write-Host "Terraform files found: $($tfFiles.Count)"
-
-            displayName: "Check Terraform Files"
+    # Terraform Init
+    - task: TerraformTask@5
+      displayName: 'Terraform Init'
+      inputs:
+        provider: 'azurerm'
+        command: 'init'
+        workingDirectory: '$(System.DefaultWorkingDirectory)/terraform/Dev'
+        backendServiceArm: 'vetologysc'
+        backendAzureRmResourceGroupName: "rg-vetology-tfstate"
+        backendAzureRmStorageAccountName: "stvetologytfstate"
+        backendAzureRmContainerName: "tfstate"
+        backendAzureRmKey: "vetology.terraform.tfstate"
 
 
-          # ----------------------------------------------------
-          # 2. Install Terraform
-          # ----------------------------------------------------
+    # Terraform Plan
+    - task: TerraformTask@5
+      displayName: 'Terraform Plan'
+      inputs:
+        provider: 'azurerm'
+        command: 'plan'
+        workingDirectory: '$(System.DefaultWorkingDirectory)/terraform/Dev'
+        environmentServiceNameAzureRM: 'vetologysc'
 
-          - task: TerraformInstaller@1
-            displayName: "Install Terraform"
-
-            inputs:
-              terraformVersion: "1.7.5"
-
-
-          # ----------------------------------------------------
-          # 3. Terraform Init
-          # ----------------------------------------------------
-
-          - task: TerraformTaskV4@4
-            displayName: "Terraform Init"
-
-            inputs:
-              provider: azurerm
-              command: init
-
-              workingDirectory: "$(Build.SourcesDirectory)"
-
-              backendServiceArm: "vetologysc"
-              backendAzureRmResourceGroupName: "rg-vetology-tfstate"
-              backendAzureRmStorageAccountName: "stvetologytfstate"
-              backendAzureRmContainerName: "tfstate"
-              backendAzureRmKey: "vetology.terraform.tfstate"
-
-
-          # ----------------------------------------------------
-          # 4. Terraform Plan
-          # ----------------------------------------------------
-
-          - task: TerraformTaskV4@4
-            displayName: "Terraform Plan"
-
-            inputs:
-              provider: azurerm
-              command: plan
-
-              workingDirectory: "$(Build.SourcesDirectory)"
-
-              environmentServiceNameAzureRM: "vetologysc"
-
-
-          # ----------------------------------------------------
-          # 5. Terraform Apply
-          # ----------------------------------------------------
-
-          - task: TerraformTaskV4@4
-            displayName: "Terraform Apply"
-
-            inputs:
-              provider: azurerm
-              command: apply
-
-              workingDirectory: "$(Build.SourcesDirectory)"
-
-              commandOptions: "-auto-approve"
-
-              environmentServiceNameAzureRM: "vetologysc"
-
-
-          # ----------------------------------------------------
-          # 6. Export VM Public IP
-          # ----------------------------------------------------
-
-          - powershell: |
-              $terraformDir = "$(Build.SourcesDirectory)"
-
-              Write-Host "=========================================="
-              Write-Host "GET VM PUBLIC IP"
-              Write-Host "=========================================="
-
-              Write-Host "Terraform directory:"
-              Write-Host $terraformDir
-
-              Set-Location $terraformDir
-
-              Write-Host ""
-              Write-Host "Terraform outputs:"
-              terraform output
-
-              Write-Host ""
-              Write-Host "Getting vm_public_ip..."
-
-              $VM_IP = terraform output -raw vm_public_ip
-
-              if ([string]::IsNullOrWhiteSpace($VM_IP)) {
-                  Write-Error "vm_public_ip Terraform output is empty."
-                  exit 1
-              }
-
-              Write-Host "VM Public IP: $VM_IP"
-
-              Write-Host "##vso[task.setvariable variable=VM_IP;isOutput=true]$VM_IP"
-
-            name: GetVMIP
-            displayName: "Export VM Public IP"
-
+    # Terraform Apply
+    - task: TerraformTask@5
+      displayName: 'Terraform Apply'
+      inputs:
+        provider: 'azurerm'
+        command: 'apply'
+        workingDirectory: '$(System.DefaultWorkingDirectory)/terraform/Dev'
+        environmentServiceNameAzureRM: 'vetologysc'
+        commandOptions: '-auto-approve'
 
   # ============================================================
   # STAGE 2 - ANSIBLE
   # ============================================================
 
-  - stage: Ansible
-    displayName: "Install Tools on VM - Ansible"
+  # - stage: Ansible
+  #   displayName: "Install Tools on VM - Ansible"
 
-    dependsOn: Terraform
+  #   dependsOn: Terraform
 
-    variables:
-      VM_IP: $[ stageDependencies.Terraform.TerraformPlan.outputs['GetVMIP.VM_IP'] ]
+  #   variables:
+  #     VM_IP: $[ stageDependencies.Terraform.TerraformPlan.outputs['GetVMIP.VM_IP'] ]
 
-    jobs:
-      - job: AnsibleProvision
-        displayName: "Check VM IP"
+  #   jobs:
+  #     - job: AnsibleProvision
+  #       displayName: "Check VM IP"
 
-        steps:
+  #       steps:
 
-          - powershell: |
-              Write-Host "=========================================="
-              Write-Host "VM IP FROM TERRAFORM"
-              Write-Host "=========================================="
+  #         - powershell: |
+  #             Write-Host "=========================================="
+  #             Write-Host "VM IP FROM TERRAFORM"
+  #             Write-Host "=========================================="
 
-              Write-Host "VM IP: $(VM_IP)"
+  #             Write-Host "VM IP: $(VM_IP)"
 
-              if ([string]::IsNullOrWhiteSpace("$(VM_IP)")) {
-                  Write-Error "VM_IP was not received from Terraform stage."
-                  exit 1
-              }
+  #             if ([string]::IsNullOrWhiteSpace("$(VM_IP)")) {
+  #                 Write-Error "VM_IP was not received from Terraform stage."
+  #                 exit 1
+  #             }
 
-            displayName: "Check VM IP"
-```
+  #           displayName: "Check VM IP"
+
