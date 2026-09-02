@@ -138,4 +138,4 @@ stages:
               Write-Host "$(VM_IP)"
 
             displayName: "Check VM IP"
-```
+
