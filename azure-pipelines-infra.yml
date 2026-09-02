@@ -183,8 +183,9 @@ stages:
           -i "$INVENTORY_FILE" \
            devops_vm \
            -m ping \
-           -T 10 \
-           -e 'ansible_ssh_common_args=-o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes'
+           -u devops \
+           --private-key /home/user/.ssh/id_rsa
+           # -e 'ansible_ssh_common_args=-o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes'
 
 
         # ansible -i "$INVENTORY_FILE" devops_vm -m ping
