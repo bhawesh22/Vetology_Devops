@@ -19,7 +19,7 @@ trigger:
       - ansible/**
 
 pool:
-  name: vetologyself
+  name: Default
 
 variables:
   - group: vetology-infra-secrets
