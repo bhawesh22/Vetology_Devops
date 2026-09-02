@@ -1,4 +1,4 @@
-
+```yaml
 variables:
   - name: ANSIBLE_WORKING_DIR
     value: ansible
@@ -23,15 +23,18 @@ stages:
 
     - checkout: self
 
+    # -----------------------------------------------------
     # Install Terraform
+    # -----------------------------------------------------
+
     - task: TerraformInstaller@1
       displayName: 'Install Terraform'
       inputs:
         terraformVersion: 'latest'
 
-    # =====================================================
+    # -----------------------------------------------------
     # Terraform Init
-    # =====================================================
+    # -----------------------------------------------------
 
     - task: TerraformTask@5
       displayName: 'Terraform Init'
@@ -45,9 +48,9 @@ stages:
         backendAzureRmContainerName: 'tfstate'
         backendAzureRmKey: 'vetology.terraform.tfstate'
 
-    # =====================================================
+    # -----------------------------------------------------
     # Terraform Plan
-    # =====================================================
+    # -----------------------------------------------------
 
     - task: TerraformTask@5
       displayName: 'Terraform Plan'
@@ -57,9 +60,9 @@ stages:
         workingDirectory: '$(System.DefaultWorkingDirectory)/terraform/Dev'
         environmentServiceNameAzureRM: 'vetologysc'
 
-    # =====================================================
+    # -----------------------------------------------------
     # Terraform Apply
-    # =====================================================
+    # -----------------------------------------------------
 
     - task: TerraformTask@5
       displayName: 'Terraform Apply'
@@ -70,9 +73,9 @@ stages:
         environmentServiceNameAzureRM: 'vetologysc'
         commandOptions: '-auto-approve'
 
-    # =====================================================
-    # Get VM Public IP from Terraform Output
-    # =====================================================
+    # -----------------------------------------------------
+    # Get VM Public IP
+    # -----------------------------------------------------
 
     - bash: |
         set -e
@@ -80,6 +83,11 @@ stages:
         cd "$(System.DefaultWorkingDirectory)/terraform/Dev"
 
         VM_PUBLIC_IP=$(terraform output -raw vm_public_ip)
+
+        if [ -z "$VM_PUBLIC_IP" ]; then
+          echo "ERROR: Terraform VM public IP is empty"
+          exit 1
+        fi
 
         echo "======================================"
         echo "VM Public IP: $VM_PUBLIC_IP"
@@ -115,9 +123,9 @@ stages:
 
     - checkout: self
 
-    # =====================================================
+    # -----------------------------------------------------
     # Show Terraform IP
-    # =====================================================
+    # -----------------------------------------------------
 
     - bash: |
         set -e
@@ -130,56 +138,81 @@ stages:
       displayName: 'Show VM Public IP'
 
 
-    # =====================================================
-    # Check Ansible Installation
-    # =====================================================
+    # -----------------------------------------------------
+    # Check Linux Environment
+    # -----------------------------------------------------
+
+    - bash: |
+        set -e
+
+        echo "Operating System:"
+        uname -a
+
+        echo "Current User:"
+        whoami
+
+        echo "HOME:"
+        echo "$HOME"
+
+      displayName: 'Check Linux Agent'
+
+
+    # -----------------------------------------------------
+    # Check Ansible
+    # -----------------------------------------------------
 
     - bash: |
         set -e
 
         echo "Checking Ansible installation..."
+
         ansible --version
 
       displayName: 'Check Ansible Installation'
 
 
-    # =====================================================
-    # Check SSH Private Key
-    # =====================================================
+    # -----------------------------------------------------
+    # Check SSH Key
+    # -----------------------------------------------------
 
     - bash: |
         set -e
 
-        echo "Checking SSH private key..."
+        SSH_KEY="$HOME/.ssh/id_rsa"
 
-        if [ ! -f "/home/user/.ssh/id_rsa" ]; then
-          echo "ERROR: SSH private key not found at /home/user/.ssh/id_rsa"
+        echo "Checking SSH key:"
+        echo "$SSH_KEY"
+
+        if [ ! -f "$SSH_KEY" ]; then
+          echo "ERROR: SSH private key not found:"
+          echo "$SSH_KEY"
           exit 1
         fi
 
-        chmod 600 /home/user/.ssh/id_rsa
+        chmod 600 "$SSH_KEY"
 
         echo "SSH private key found."
 
       displayName: 'Check SSH Private Key'
 
 
-    # =====================================================
-    # Generate Ansible Inventory
-    # =====================================================
+    # -----------------------------------------------------
+    # Generate Dynamic Ansible Inventory
+    # -----------------------------------------------------
 
     - bash: |
         set -e
 
-        INVENTORY_DIR="$(System.DefaultWorkingDirectory)/$(ANSIBLE_WORKING_DIR)"
-        INVENTORY_FILE="$INVENTORY_DIR/inventory.ini"
+        ANSIBLE_DIR="$(System.DefaultWorkingDirectory)/$(ANSIBLE_WORKING_DIR)"
+        INVENTORY_FILE="$ANSIBLE_DIR/inventory.ini"
+        SSH_KEY="$HOME/.ssh/id_rsa"
 
-        mkdir -p "$INVENTORY_DIR"
+        mkdir -p "$ANSIBLE_DIR"
 
         cat > "$INVENTORY_FILE" <<EOF
-        [devops_vm]
-        $(VM_PUBLIC_IP) ansible_user=devops ansible_ssh_private_key_file=/home/user/.ssh/id_rsa
-        EOF
+[devops_vm]
+$(VM_PUBLIC_IP) ansible_user=devops ansible_ssh_private_key_file=$SSH_KEY
+EOF
 
         echo "======================================"
         echo "Generated Ansible Inventory:"
@@ -190,9 +223,9 @@ stages:
       displayName: 'Generate Ansible Inventory'
 
 
-    # =====================================================
-    # Test Ansible Connection
-    # =====================================================
+    # -----------------------------------------------------
+    # Test Ansible SSH Connection
+    # -----------------------------------------------------
 
     - bash: |
         set -e
@@ -206,9 +239,9 @@ stages:
       displayName: 'Test Ansible Connection'
 
 
-    # =====================================================
+    # -----------------------------------------------------
     # Run Ansible Playbook
-    # =====================================================
+    # -----------------------------------------------------
 
     - bash: |
         set -e
@@ -216,11 +249,13 @@ stages:
         INVENTORY_FILE="$(System.DefaultWorkingDirectory)/$(ANSIBLE_WORKING_DIR)/inventory.ini"
         PLAYBOOK_FILE="$(System.DefaultWorkingDirectory)/$(ANSIBLE_WORKING_DIR)/playbook.yml"
 
-        echo "Running Ansible Playbook..."
+        echo "======================================"
+        echo "Running Ansible Playbook"
+        echo "======================================"
 
         ansible-playbook \
           -i "$INVENTORY_FILE" \
           "$PLAYBOOK_FILE"
 
       displayName: 'Run Ansible Playbook'
-
+```
