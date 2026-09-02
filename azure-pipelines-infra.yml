@@ -74,7 +74,7 @@ stages:
               command: apply
               workingDirectory: $(TF_WORKING_DIR)
               commandOptions: "--auto-approve"
-              environmentServiceNameAzureRM: ""vetologysc"
+              environmentServiceNameAzureRM: "vetologysc"
             env:
               ARM_CLIENT_ID: $(ARM_CLIENT_ID)
               ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
