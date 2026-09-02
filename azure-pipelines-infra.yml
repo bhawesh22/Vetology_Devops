@@ -19,7 +19,7 @@ trigger:
       - ansible/**
 
 pool:
-  vmImage: ubuntu-latest
+  name: vetologyself
 
 variables:
   - group: vetology-infra-secrets
