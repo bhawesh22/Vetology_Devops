@@ -1,4 +1,4 @@
-```yaml
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Pipeline 2: App — Build, Lint, Deploy, Test (via Taskfile)
 #
@@ -328,4 +328,3 @@ stages:
                     echo "Application verification successful."
 
                   displayName: "Verify Doppler deploy response"
-```
