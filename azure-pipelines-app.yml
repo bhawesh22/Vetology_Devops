@@ -1,10 +1,14 @@
+```yaml
 # ─────────────────────────────────────────────────────────────────────────────
 # Pipeline 2: App — Build, Lint, Deploy, Test (via Taskfile)
-# Trigger: changes in app files (Dockerfile, index.html, Taskfile.yml)
-# Required Azure DevOps Variable Group: "vetology-app-secrets"
-#   - VM_IP            (public IP of the target VM)
-#   - SSH_PRIVATE_KEY  (base64 encoded private key)
-#   - DOPPLER_TOKEN    (Doppler service token for deploywithdoppler task)
+#
+# Required Azure DevOps Variable Group:
+#   vetology-app-secrets
+#
+# Variables:
+#   VM_IP
+#   SSH_PRIVATE_KEY  -> base64 encoded private key
+#   DOPPLER_TOKEN    -> secret
 # ─────────────────────────────────────────────────────────────────────────────
 
 trigger: none
@@ -17,123 +21,311 @@ variables:
 
 stages:
 
-  # ─── Stage 1: Lint ────────────────────────────────────────────────────────
+  # ───────────────────────────────────────────────────────────────────────────
+  # Stage 1: Lint
+  # ───────────────────────────────────────────────────────────────────────────
   - stage: Lint
     displayName: "Lint Dockerfile (hadolint)"
+
     jobs:
       - job: LintJob
         displayName: "task lint"
+
         steps:
+
           - bash: |
-              sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
+              set -e
+
+              echo "Installing Task..."
+
+              mkdir -p "$HOME/bin"
+
+              sh -c "$(curl --location https://taskfile.dev/install.sh)" -- \
+                -d \
+                -b "$HOME/bin"
+
+              echo "##vso[task.prependpath]$HOME/bin"
+
+              echo "Task version:"
+              task --version
+
             displayName: "Install Task"
 
-          - bash: task lint
+          - bash: |
+              set -e
+
+              echo "Running task lint..."
+
+              task lint
+
             displayName: "Run hadolint via Task"
 
-  # ─── Stage 2: Build ───────────────────────────────────────────────────────
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Stage 2: Build
+  # ───────────────────────────────────────────────────────────────────────────
   - stage: Build
     displayName: "Build Docker Image"
+
     dependsOn: Lint
+
     jobs:
       - job: BuildJob
         displayName: "task build"
+
         steps:
+
           - bash: |
-              sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
+              set -e
+
+              echo "Installing Task..."
+
+              mkdir -p "$HOME/bin"
+
+              sh -c "$(curl --location https://taskfile.dev/install.sh)" -- \
+                -d \
+                -b "$HOME/bin"
+
+              echo "##vso[task.prependpath]$HOME/bin"
+
+              echo "Task version:"
+              task --version
+
             displayName: "Install Task"
 
-          - bash: task build
+          - bash: |
+              set -e
+
+              echo "Running task build..."
+
+              task build
+
             displayName: "Build webtext-app image"
 
           - bash: |
-              IMAGE_ID=$(docker images webtext-app --format "{{.ID}}")
+              set -e
+
+              echo "Checking Docker image..."
+
+              IMAGE_ID=$(docker images webtext-app --format "{{.ID}}" | head -n 1)
+
+              if [ -z "$IMAGE_ID" ]; then
+                echo "ERROR: webtext-app image was not created."
+                exit 1
+              fi
+
               echo "Built image ID: $IMAGE_ID"
-              docker save webtext-app | gzip > webtext-app.tar.gz
+
+              echo "Saving Docker image..."
+
+              docker save webtext-app | gzip > \
+                "$(Build.ArtifactStagingDirectory)/webtext-app.tar.gz"
+
+              echo "Artifact created:"
+              ls -lh "$(Build.ArtifactStagingDirectory)/webtext-app.tar.gz"
+
             displayName: "Save image as artifact"
 
-          - publish: webtext-app.tar.gz
+          - publish: "$(Build.ArtifactStagingDirectory)/webtext-app.tar.gz"
             artifact: docker-image
             displayName: "Publish Docker image artifact"
 
-  # ─── Stage 3: Deploy + Test ───────────────────────────────────────────────
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Stage 3: Deploy + Test
+  # ───────────────────────────────────────────────────────────────────────────
   - stage: DeployTest
     displayName: "Deploy & Test on VM"
+
     dependsOn: Build
+
     jobs:
       - deployment: DeployToVM
         displayName: "Deploy to VM and run tests"
+
         environment: "vetology-dev"
+
         strategy:
           runOnce:
             deploy:
               steps:
+
+                # Download artifact
                 - download: current
                   artifact: docker-image
                   displayName: "Download Docker image artifact"
 
+
+                # Setup SSH
                 - bash: |
+                    set -e
+
+                    echo "Setting up SSH..."
+
                     mkdir -p ~/.ssh
+
                     echo "$(SSH_PRIVATE_KEY)" | base64 -d > ~/.ssh/id_rsa
+
                     chmod 600 ~/.ssh/id_rsa
-                    ssh-keyscan -H $(VM_IP) >> ~/.ssh/known_hosts
+
+                    ssh-keyscan -H "$(VM_IP)" >> ~/.ssh/known_hosts
+
+                    echo "Testing SSH connection..."
+
+                    ssh \
+                      -i ~/.ssh/id_rsa \
+                      devops@"$(VM_IP)" \
+                      "echo SSH connection successful"
+
                   displayName: "Setup SSH key"
 
-                - bash: |
-                    # Copy image tar and project files to VM
-                    scp -i ~/.ssh/id_rsa \
-                      $(Pipeline.Workspace)/docker-image/webtext-app.tar.gz \
-                      devops@$(VM_IP):~/webtext-app.tar.gz
 
-                    scp -i ~/.ssh/id_rsa \
-                      $(Build.SourcesDirectory)/Taskfile.yml \
-                      $(Build.SourcesDirectory)/Dockerfile \
-                      $(Build.SourcesDirectory)/index.html \
-                      devops@$(VM_IP):~/vetology-devops/
+                # Copy image and files to VM
+                - bash: |
+                    set -e
+
+                    echo "Creating application directory..."
+
+                    ssh \
+                      -i ~/.ssh/id_rsa \
+                      devops@"$(VM_IP)" \
+                      "mkdir -p ~/vetology-devops"
+
+                    echo "Copying Docker image..."
+
+                    scp \
+                      -i ~/.ssh/id_rsa \
+                      "$(Pipeline.Workspace)/docker-image/webtext-app.tar.gz" \
+                      devops@"$(VM_IP)":~/webtext-app.tar.gz
+
+                    echo "Copying Taskfile..."
+
+                    scp \
+                      -i ~/.ssh/id_rsa \
+                      "$(Build.SourcesDirectory)/Taskfile.yml" \
+                      devops@"$(VM_IP)":~/vetology-devops/Taskfile.yml
+
+                    echo "Copying Dockerfile..."
+
+                    scp \
+                      -i ~/.ssh/id_rsa \
+                      "$(Build.SourcesDirectory)/Dockerfile" \
+                      devops@"$(VM_IP)":~/vetology-devops/Dockerfile
+
+                    echo "Copying index.html..."
+
+                    scp \
+                      -i ~/.ssh/id_rsa \
+                      "$(Build.SourcesDirectory)/index.html" \
+                      devops@"$(VM_IP)":~/vetology-devops/index.html
+
                   displayName: "Copy files to VM"
 
+
+                # Deploy + Test
                 - bash: |
-                    ssh -i ~/.ssh/id_rsa devops@$(VM_IP) << 'EOF'
-                      set -e
-                      cd ~/vetology-devops
+                    set -e
 
-                      # Load pre-built image
-                      docker load < ~/webtext-app.tar.gz
+                    ssh \
+                      -i ~/.ssh/id_rsa \
+                      devops@"$(VM_IP)" << 'EOF'
 
-                      # Deploy
-                      task deploy
+                    set -e
 
-                      # Test
-                      task test
+                    echo "Connected to VM"
+
+                    cd ~/vetology-devops
+
+                    echo "Loading Docker image..."
+
+                    docker load < ~/webtext-app.tar.gz
+
+                    echo "Docker image loaded."
+
+                    echo "Running deployment..."
+
+                    task deploy
+
+                    echo "Running tests..."
+
+                    task test
+
+                    echo "Deployment and tests completed successfully."
+
                     EOF
-                  displayName: "Deploy and test on VM (task deploy + task test)"
 
-  # ─── Stage 4: Deploy with Doppler (optional) ─────────────────────────────
+                  displayName: "Deploy and test on VM"
+
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Stage 4: Deploy with Doppler
+  # ───────────────────────────────────────────────────────────────────────────
   - stage: DeployDoppler
     displayName: "Deploy with Doppler secrets"
+
     dependsOn: DeployTest
-    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+
+    condition: |
+      and(
+        succeeded(),
+        eq(variables['Build.SourceBranch'], 'refs/heads/main')
+      )
+
     jobs:
       - deployment: DeployDopplerJob
         displayName: "task deploywithdoppler"
+
         environment: "vetology-dev"
+
         strategy:
           runOnce:
             deploy:
               steps:
+
+                # Setup SSH
                 - bash: |
+                    set -e
+
                     mkdir -p ~/.ssh
+
                     echo "$(SSH_PRIVATE_KEY)" | base64 -d > ~/.ssh/id_rsa
+
                     chmod 600 ~/.ssh/id_rsa
-                    ssh-keyscan -H $(VM_IP) >> ~/.ssh/known_hosts
+
+                    ssh-keyscan -H "$(VM_IP)" >> ~/.ssh/known_hosts
+
                   displayName: "Setup SSH key"
 
-                - bash: |
-                    ssh -i ~/.ssh/id_rsa devops@$(VM_IP) \
-                      "cd ~/vetology-devops && DOPPLER_TOKEN=$(DOPPLER_TOKEN) task deploywithdoppler"
-                  displayName: "Run deploywithdoppler on VM"
 
+                # Doppler deployment
                 - bash: |
-                    ssh -i ~/.ssh/id_rsa devops@$(VM_IP) \
-                      "curl -s http://localhost:8081"
+                    set -e
+
+                    echo "Running deploywithdoppler..."
+
+                    ssh \
+                      -i ~/.ssh/id_rsa \
+                      devops@"$(VM_IP)" \
+                      "cd ~/vetology-devops && \
+                       export DOPPLER_TOKEN='$(DOPPLER_TOKEN)' && \
+                       task deploywithdoppler"
+
+                  displayName: "Run deploywithdoppler"
+
+
+                # Verify application
+                - bash: |
+                    set -e
+
+                    echo "Checking application response..."
+
+                    ssh \
+                      -i ~/.ssh/id_rsa \
+                      devops@"$(VM_IP)" \
+                      "curl -fsS http://localhost:8081"
+
+                    echo ""
+                    echo "Application verification successful."
+
                   displayName: "Verify Doppler deploy response"
+```
