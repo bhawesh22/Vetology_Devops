@@ -6,9 +6,8 @@
 #   - SSH_PRIVATE_KEY  (base64 encoded private key)
 #   - DOPPLER_TOKEN    (Doppler service token for deploywithdoppler task)
 # ─────────────────────────────────────────────────────────────────────────────
-VM_IP: 20.83.245.119
-SSH_PRIVATE_KEY:
-DOPPLER_TOKEN:
+variables:
+  - group: vetology-app-secrets
 trigger: none
 
 pool:
